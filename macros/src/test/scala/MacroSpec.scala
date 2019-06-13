@@ -68,6 +68,12 @@ final class MacroSpec extends org.specs2.mutable.Specification {
           "value" -> BSONNull)
     }
 
+    "read default value for missing field" in {
+      Macros.readerOpts[WithDefaultValue, Macros.Options.DefaultValues].read(
+        BSONDocument(
+          "name" -> "name")).value must be("defaultValue")
+    }
+
     "support seq" in {
       roundtrip(
         WordLover("john", Seq("hello", "world")),

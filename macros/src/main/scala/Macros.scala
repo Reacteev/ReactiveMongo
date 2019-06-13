@@ -99,6 +99,11 @@ object Macros {
      * (disabled by default).
      */
     trait AutomaticMaterialization extends Default
+
+    /**
+     * If field is not present, use default value
+     */
+    trait DefaultValues extends Default
   }
 
   /** Annotations to use on case classes that are being processed by macros. */

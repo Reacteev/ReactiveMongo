@@ -164,36 +164,47 @@ private[bson] object MacroImpl {
 
       val resolve = resolver(boundTypes, "Reader")(readerType)
 
+      val withDefaultValues = hasOption[Macros.Options.DefaultValues];
+
       val values = constructor.paramLists.
-        headOption.toSeq.flatten.map { param =>
-          val t = param.typeSignature
-          val sig = boundTypes.getOrElse(t.typeSymbol.fullName, t)
-          val (reader, _) = resolve(sig)
-          val pname = paramName(param)
+        headOption.toSeq.flatten.zipWithIndex.map {
+          case (param, i) =>
+            val t = param.typeSignature
+            val sig = boundTypes.getOrElse(t.typeSymbol.fullName, t)
+            val (reader, _) = resolve(sig)
+            val pname = paramName(param)
 
-          if (reader.isEmpty) {
-            c.abort(c.enclosingPosition, s"Implicit not found '$pname': ${classOf[Reader[_]].getName}[_, $sig]")
-          }
-
-          if (param.annotations.exists(_.tree.tpe =:= typeOf[Flatten])) {
-            if (reader.toString == "forwardReader") {
-              c.abort(
-                c.enclosingPosition,
-                s"Cannot flatten reader for '$pname': recursive type")
+            if (reader.isEmpty) {
+              c.abort(c.enclosingPosition, s"Implicit not found '$pname': ${classOf[Reader[_]].getName}[_, $sig]")
             }
 
-            if (!(reader.tpe <:< appliedType(docReaderType, List(sig)))) {
-              c.abort(c.enclosingPosition, s"Cannot flatten reader '$reader': doesn't conform BSONDocumentReader")
+            if (param.annotations.exists(_.tree.tpe =:= typeOf[Flatten])) {
+              if (reader.toString == "forwardReader") {
+                c.abort(
+                  c.enclosingPosition,
+                  s"Cannot flatten reader for '$pname': recursive type")
+              }
+              if (!(reader.tpe <:< appliedType(docReaderType, List(sig)))) {
+                c.abort(c.enclosingPosition, s"Cannot flatten reader '$reader': doesn't conform BSONDocumentReader")
+              }
+
+              q"${reader}.read(macroDoc)"
+            } else optionTypeParameter(sig) match {
+              case Some(_) =>
+                q"macroDoc.getAsUnflattenedTry($pname)($reader).get"
+
+              case _ =>
+                if (withDefaultValues && param.asTerm.isParamWithDefault) {
+                  val getter = TermName("apply$default$" + (i + 1))
+                  q"""(macroDoc.getAsTry($pname)($reader) match {
+case scala.util.Failure(_: reactivemongo.bson.exceptions.DocumentKeyNotFound) => scala.util.Success($companion.$getter)
+case scala.util.Failure(e)                      => scala.util.Failure(e)
+case scala.util.Success(e)                      => scala.util.Success(e)
+}).get"""
+                } else {
+                  q"macroDoc.getAsTry($pname)($reader).get"
+                }
             }
-
-            q"${reader}.read(macroDoc)"
-          } else optionTypeParameter(sig) match {
-            case Some(_) =>
-              q"macroDoc.getAsUnflattenedTry($pname)($reader).get"
-
-            case _ =>
-              q"macroDoc.getAsTry($pname)($reader).get"
-          }
         }
 
       q"${Ident(companion.name)}.apply(..$values)"

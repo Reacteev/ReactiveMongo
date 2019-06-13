@@ -22,6 +22,7 @@ object MacroTest {
   case class Optional(name: String, value: Option[String])
   case class OptionalAsNull(name: String, @NoneAsNull value: Option[String])
   case class Single(value: BigDecimal)
+  case class WithDefaultValue(name: String, value: String = "defaultValue")
   case class OptionalSingle(value: Option[String])
   case class SingleTuple(value: (String, String))
   case class User(_id: BSONObjectID = BSONObjectID.generate(), name: String)
